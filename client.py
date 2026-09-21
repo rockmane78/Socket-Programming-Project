@@ -1,7 +1,7 @@
 from socket import *
 
 # Remplace par l'IP exacte de la machine serveur !
-serverName = '' 
+serverName = '10.8.93.243' 
 serverPort = 12000
 
 clientSocket = socket(AF_INET, SOCK_STREAM)
