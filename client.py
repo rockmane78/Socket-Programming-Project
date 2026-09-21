@@ -1,8 +1,8 @@
 from socket import AF_INET, SOCK_STREAM, socket
 import threading
 
-
 serverName = '10.8.93.243'  # Remplacer par l'IP du serveur sur un autre ordinateur.
+
 serverPort = 12000
 
 
