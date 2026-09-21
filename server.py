@@ -6,21 +6,31 @@ import threading
 clients = {}
 # groupes = { "nom_groupe": [socket1, socket2] }
 groupes = {}
+verrou = threading.Lock()
 
 HOST = '0.0.0.0'  # Écoute sur toutes les interfaces réseau
 PORT = 12000
 
 def gerer_client(client_socket, client_address):
     pseudo = None
+    flux = client_socket.makefile('r', encoding='utf-8')
     try:
-        # 1. Demander/recevoir le pseudo à la connexion
-        pseudo = client_socket.recv(1024).decode('utf-8').strip()
-        clients[pseudo] = client_socket
+        # Le protocole utilise une ligne TCP par message.
+        pseudo = flux.readline().strip()
+        if not pseudo:
+            return
+
+        with verrou:
+            if pseudo in clients:
+                client_socket.sendall('[Erreur] Ce pseudo est deja utilise.\n'.encode('utf-8'))
+                return
+            clients[pseudo] = client_socket
         print(f"[+] {pseudo} s'est connecté depuis {client_address}")
+        client_socket.sendall(f"[Info] Bienvenue {pseudo}. Utilisez /join <groupe>.\n".encode('utf-8'))
 
         # 2. Boucle de réception des messages du client
         while True:
-            data = client_socket.recv(1024).decode('utf-8')
+            data = flux.readline().strip()
             if not data:
                 break
             
@@ -31,8 +41,12 @@ def gerer_client(client_socket, client_address):
 
             if type_msg == "PRIV" and len(parties) == 3:
                 destinataire, msg = parties[1], parties[2]
-                if destinataire in clients:
-                    clients[destinataire].send(f"[Privé de {pseudo}] {msg}".encode('utf-8'))
+                with verrou:
+                    destinataire_socket = clients.get(destinataire)
+                if destinataire_socket:
+                    destinataire_socket.sendall(f"[Privé de {pseudo}] {msg}\n".encode('utf-8'))
+                else:
+                    client_socket.sendall('[Erreur] Destinataire introuvable.\n'.encode('utf-8'))
 
             elif type_msg == "JOIN_GROUP" and len(parties) >= 2:
                 nom_groupe = parties[1]
@@ -40,22 +54,27 @@ def gerer_client(client_socket, client_address):
                     groupes[nom_groupe] = []
                 if client_socket not in groupes[nom_groupe]:
                     groupes[nom_groupe].append(client_socket)
-                client_socket.send(f"[Info] Vous avez rejoint le groupe {nom_groupe}".encode('utf-8'))
+                client_socket.sendall(f"[Info] Vous avez rejoint le groupe {nom_groupe}\n".encode('utf-8'))
 
             elif type_msg == "GROUP" and len(parties) == 3:
                 nom_groupe, msg = parties[1], parties[2]
                 if nom_groupe in groupes:
                     for s in groupes[nom_groupe]:
                         if s != client_socket:  # Ne pas se renvoyer le message à soi-même
-                            s.send(f"[{nom_groupe}] {pseudo}: {msg}".encode('utf-8'))
+                            s.sendall(f"[{nom_groupe}] {pseudo}: {msg}\n".encode('utf-8'))
 
     except Exception as e:
         print(f"Erreur avec {pseudo}: {e}")
     finally:
         # Nettoyage lors de la déconnexion
-        if pseudo and pseudo in clients:
-            del clients[pseudo]
+        with verrou:
+            if pseudo and clients.get(pseudo) is client_socket:
+                del clients[pseudo]
+            for membres in groupes.values():
+                if client_socket in membres:
+                    membres.remove(client_socket)
             print(f"[-] {pseudo} s'est déconnecté.")
+        flux.close()
         client_socket.close()
 
 def demarrer_serveur():
