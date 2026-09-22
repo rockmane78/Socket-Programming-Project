@@ -1,13 +1,10 @@
 from socket import AF_INET, SOCK_STREAM, socket
 import threading
 
-serverName = '10.8.93.243'  # Remplacer par l'IP du serveur sur un autre ordinateur.
-
+serverName = '10.8.93.243' 
 serverPort = 12000
 
-
 def recevoir_messages(client_socket):
-	"""Affiche les messages reçus pendant que l'utilisateur écrit."""
 	flux = client_socket.makefile('r', encoding='utf-8')
 	try:
 		for message in flux:
@@ -17,7 +14,6 @@ def recevoir_messages(client_socket):
 	finally:
 		flux.close()
 
-
 clientSocket = socket(AF_INET, SOCK_STREAM)
 clientSocket.connect((serverName, serverPort))
 
@@ -25,16 +21,15 @@ pseudo = input("Votre pseudo : ").strip()
 clientSocket.sendall(f"{pseudo}\n".encode('utf-8'))
 
 threading.Thread(target=recevoir_messages, args=(clientSocket,), daemon=True).start()
-print("Commandes : /join groupe, /group groupe message, /priv pseudo message, /quit")
+print("/join grp, /group grp mess, /priv pseudo mess, /q")
 
 try:
 	while True:
 		commande = input("> ").strip()
 		if not commande:
 			continue
-		if commande == '/quit':
+		if commande == '/q':
 			break
-
 		morceaux = commande.split(' ', 2)
 		if commande.startswith('/join ') and len(morceaux) == 2:
 			message = f"JOIN_GROUP:{morceaux[1]}"
